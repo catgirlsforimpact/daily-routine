@@ -128,6 +128,44 @@ ul { list-style: none; margin: 16px 0 0; padding: 0; display: grid; gap: 4px; }
 .item[aria-pressed="true"] .box svg { opacity: 1; }
 .item[aria-pressed="true"] .label { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--lilac); text-decoration-thickness: 2px; }
 
+/* Your own items */
+li { display: flex; align-items: center; gap: 2px; }
+li .item { flex: 1 1 auto; width: auto; min-width: 0; }
+.remove {
+  flex: none; width: 40px; height: 40px; margin-right: -10px; border: 0; background: none; border-radius: 50%;
+  display: grid; place-items: center; color: var(--muted); cursor: pointer;
+  touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+}
+.remove svg { width: 14px; height: 14px; stroke: currentColor; stroke-width: 2; fill: none; }
+.remove:active { background: rgba(201, 158, 224, .24); }
+.remove:focus-visible { outline: 2px solid var(--orchid); outline-offset: 2px; }
+.add { margin-top: 6px; }
+.add-open {
+  font: inherit; font-size: 15px; color: var(--orchid); background: none; border: 0;
+  padding: 10px 6px; margin: 0 -6px; min-height: 44px; border-radius: 12px; cursor: pointer;
+  touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+}
+.add-open:active { background: rgba(201, 158, 224, .2); }
+.add-open:focus-visible { outline: 2px solid var(--orchid); outline-offset: 2px; }
+.add-form { display: grid; gap: 10px; margin-top: 4px; }
+.add-form input[type="text"] {
+  width: 100%; font: inherit; font-size: 17px; color: var(--plum);
+  background: #fff; border: 1.5px solid var(--lilac); border-radius: 12px; padding: 11px 14px;
+  -webkit-user-select: text; user-select: text; -webkit-appearance: none; appearance: none;
+}
+.add-form input[type="text"]::placeholder { color: var(--muted); opacity: .7; }
+.add-form input[type="text"]:focus { outline: 2px solid var(--orchid); outline-offset: 1px; }
+.add-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.keep-label { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--plum); margin-right: auto; min-height: 36px; cursor: pointer; }
+.keep-label input { width: 18px; height: 18px; margin: 0; accent-color: var(--orchid); }
+.add-go, .cancel {
+  font: inherit; font-size: 14px; border-radius: 999px; padding: 8px 16px; cursor: pointer;
+  touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+}
+.add-go { background: var(--orchid); color: #fff; border: 1.5px solid var(--orchid); font-weight: 500; }
+.cancel { background: none; color: var(--orchid); border: 1.5px solid var(--lilac); }
+.add-go:focus-visible, .cancel:focus-visible { outline: 2px solid var(--orchid); outline-offset: 2px; }
+
 .wave { display: block; width: 100%; height: 18px; margin: 22px 0 18px; }
 .wave path { stroke: var(--lilac); stroke-width: 2; fill: none; }
 
@@ -175,6 +213,17 @@ ul { list-style: none; margin: 16px 0 0; padding: 0; display: grid; gap: 4px; }
     <section>
       <div class="head"><h2>Good morning</h2><span class="count" id="count-am"></span></div>
       <ul id="list-am"></ul>
+      <div class="add" data-part="am">
+        <button class="add-open" type="button">+ Add something</button>
+        <form class="add-form" hidden>
+          <input type="text" maxlength="60" placeholder="e.g. Top 3: finish essay" aria-label="New morning item" enterkeyhint="done" autocomplete="off">
+          <div class="add-row">
+            <label class="keep-label"><input type="checkbox" class="keep"> Keep every day</label>
+            <button type="button" class="cancel">Done</button>
+            <button type="submit" class="add-go">Add</button>
+          </div>
+        </form>
+      </div>
     </section>
 
     <svg class="wave" viewBox="0 0 400 18" preserveAspectRatio="none" aria-hidden="true">
@@ -184,6 +233,17 @@ ul { list-style: none; margin: 16px 0 0; padding: 0; display: grid; gap: 4px; }
     <section>
       <div class="head"><h2>Good night</h2><span class="count" id="count-pm"></span></div>
       <ul id="list-pm"></ul>
+      <div class="add" data-part="pm">
+        <button class="add-open" type="button">+ Add something</button>
+        <form class="add-form" hidden>
+          <input type="text" maxlength="60" placeholder="e.g. Pack bag for tomorrow" aria-label="New night item" enterkeyhint="done" autocomplete="off">
+          <div class="add-row">
+            <label class="keep-label"><input type="checkbox" class="keep"> Keep every day</label>
+            <button type="button" class="cancel">Done</button>
+            <button type="submit" class="add-go">Add</button>
+          </div>
+        </form>
+      </div>
     </section>
 
     <div class="foot">
@@ -230,13 +290,33 @@ ul { list-style: none; margin: 16px 0 0; padding: 0; display: grid; gap: 4px; }
   } catch (e) {}
   function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} }
 
+  /* Items you add yourself. "day" is set on just-for-today items, which vanish at the next new day. */
+  var CKEY = 'sofi-routine-custom-v1';
+  var custom = { am: [], pm: [] };
+  try {
+    var savedCustom = JSON.parse(localStorage.getItem(CKEY) || 'null');
+    if (savedCustom && Array.isArray(savedCustom.am) && Array.isArray(savedCustom.pm)) custom = savedCustom;
+  } catch (e) {}
+  function saveCustom() { try { localStorage.setItem(CKEY, JSON.stringify(custom)); } catch (e) {} }
+  function pruneCustom() {
+    var t = today(), changed = false;
+    ['am', 'pm'].forEach(function (part) {
+      var kept = custom[part].filter(function (i) { return !i.day || i.day === t; });
+      if (kept.length !== custom[part].length) { custom[part] = kept; changed = true; }
+    });
+    if (changed) saveCustom();
+  }
+  pruneCustom();
+  function itemsFor(part) { return ROUTINE[part].concat(custom[part]); }
+
   var CHECK = '<svg viewBox="0 0 16 16"><path d="M3 8.5l3.2 3L13 4.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  var CROSS = '<svg viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8" stroke-linecap="round"/></svg>';
 
   function render() {
     ['am', 'pm'].forEach(function (part) {
       var ul = document.getElementById('list-' + part);
       ul.innerHTML = '';
-      ROUTINE[part].forEach(function (it) {
+      itemsFor(part).forEach(function (it) {
         var li = document.createElement('li');
         var b = document.createElement('button');
         b.type = 'button';
@@ -246,26 +326,42 @@ ul { list-style: none; margin: 16px 0 0; padding: 0; display: grid; gap: 4px; }
         b.innerHTML = '<span class="box">' + CHECK + '</span><span class="label"></span>';
         var label = b.querySelector('.label');
         label.textContent = it.text;
-        if (it.tag) {
+        var tagText = it.tag || (it.custom && it.day ? 'today' : '');
+        if (tagText) {
           var t = document.createElement('span');
           t.className = 'tag';
-          t.textContent = it.tag;
+          t.textContent = tagText;
           label.appendChild(t);
         }
         b.addEventListener('click', function () {
-          if (state.day !== today()) state = { day: today(), done: {} };
+          if (state.day !== today()) { rollover(); return; }
           state.done[it.id] = !state.done[it.id];
           save();
           render();
         });
         li.appendChild(b);
+        if (it.custom) {
+          var x = document.createElement('button');
+          x.type = 'button';
+          x.className = 'remove';
+          x.setAttribute('aria-label', 'Remove ' + it.text);
+          x.innerHTML = CROSS;
+          x.addEventListener('click', function () {
+            custom[part] = custom[part].filter(function (i) { return i.id !== it.id; });
+            delete state.done[it.id];
+            saveCustom();
+            save();
+            render();
+          });
+          li.appendChild(x);
+        }
         ul.appendChild(li);
       });
-      var required = ROUTINE[part].filter(function (i) { return i.tag !== 'optional'; });
+      var required = itemsFor(part).filter(function (i) { return i.tag !== 'optional'; });
       var n = required.filter(function (i) { return state.done[i.id]; }).length;
       document.getElementById('count-' + part).textContent = n + ' of ' + required.length;
     });
-    var all = ROUTINE.am.concat(ROUTINE.pm).filter(function (i) { return i.tag !== 'optional'; });
+    var all = itemsFor('am').concat(itemsFor('pm')).filter(function (i) { return i.tag !== 'optional'; });
     var allDone = all.every(function (i) { return state.done[i.id]; });
     var status = document.getElementById('status');
     if (allDone) { status.className = 'done-msg'; status.textContent = 'All done today. Sleep well ✨'; }
@@ -280,8 +376,39 @@ ul { list-style: none; margin: 16px 0 0; padding: 0; display: grid; gap: 4px; }
 
   /* A home-screen app stays alive in the background for days, so re-check the date whenever it comes back. */
   function rollover() {
-    if (state.day !== today()) { state = { day: today(), done: {} }; save(); render(); }
+    if (state.day !== today()) { state = { day: today(), done: {} }; pruneCustom(); save(); render(); }
   }
+
+  /* Add-your-own form, one per section */
+  document.querySelectorAll('.add').forEach(function (wrap) {
+    var part = wrap.getAttribute('data-part');
+    var open = wrap.querySelector('.add-open');
+    var form = wrap.querySelector('.add-form');
+    var input = form.querySelector('input[type="text"]');
+    var keep = form.querySelector('.keep');
+    open.addEventListener('click', function () {
+      form.hidden = false; open.hidden = true; input.focus();
+    });
+    form.querySelector('.cancel').addEventListener('click', function () {
+      form.hidden = true; open.hidden = false; input.value = '';
+    });
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var text = input.value.replace(/\s+/g, ' ').trim();
+      if (!text) { input.focus(); return; }
+      rollover();
+      custom[part].push({
+        id: 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+        text: text,
+        day: keep.checked ? null : today(),
+        custom: true
+      });
+      saveCustom();
+      render();
+      input.value = '';
+      input.focus();   /* stay open so a top 3 can be typed in one go */
+    });
+  });
   document.addEventListener('visibilitychange', function () { if (!document.hidden) rollover(); });
   window.addEventListener('pageshow', rollover);
   window.addEventListener('focus', rollover);
