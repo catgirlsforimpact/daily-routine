@@ -185,6 +185,16 @@ ul { list-style: none; margin: 16px 0 0; padding: 0; display: grid; gap: 4px; }
 .item[aria-pressed="true"] .box svg { opacity: 1; }
 .item[aria-pressed="true"] .label { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--lilac); text-decoration-thickness: 2px; }
 
+/* Sections fold away: by themselves when fully ticked, or when you tap the heading */
+.head { cursor: pointer; border-radius: 12px; -webkit-tap-highlight-color: transparent; touch-action: manipulation; flex-wrap: nowrap; align-items: center; }
+.head h2, .head h3 { margin-right: auto; transition: color .3s; }
+.head:focus-visible { outline: 2px solid var(--orchid); outline-offset: 4px; }
+.chev { flex: none; width: 18px; height: 18px; color: var(--muted); transition: transform .25s ease; }
+.chev svg { display: block; width: 100%; height: 100%; stroke: currentColor; stroke-width: 2; fill: none; }
+.folded .chev { transform: rotate(-90deg); }
+.folded > ul, .folded > .add, .folded > .empty { display: none; }
+.folded.alldone h2 { color: var(--muted); }
+
 /* Your own items */
 li { display: flex; align-items: center; gap: 2px; }
 li .item { flex: 1 1 auto; width: auto; min-width: 0; }
@@ -393,7 +403,7 @@ ul:empty { margin-top: 0; }
         <path d="M0 10 C40 2 60 2 100 9 S160 16 200 9 S260 2 300 9 S360 16 400 6"/>
       </svg>
       <section>
-        <div class="head"><h3>Planned for tomorrow</h3><span class="count" id="count-next"></span></div>
+        <div class="head"><h3>Tomorrow’s plan</h3><span class="count" id="count-next"></span></div>
         <ul id="list-next"></ul>
       </section>
     </div>
@@ -530,6 +540,33 @@ ul:empty { margin-top: 0; }
     return ROUTINE[part].filter(function (i) { return hidden.indexOf(i.id) < 0; })
       .concat(custom[part].filter(function (i) { return !i.day || i.day === t; }));
   }
+  var holdOpen = null;     /* section that was just finished, kept open for a moment */
+  var nextOpen = false;    /* "Planned for tomorrow" starts folded */
+  document.querySelectorAll('.card .head').forEach(function (head) {
+    var sec = head.parentNode;
+    var list = sec.querySelector('ul');
+    var part = list.id.replace('list-', '');
+    var chev = document.createElement('span');
+    chev.className = 'chev';
+    chev.innerHTML = '<svg viewBox="0 0 18 18"><path d="M4 7l5 5 5-5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    head.appendChild(chev);
+    head.setAttribute('role', 'button');
+    head.setAttribute('tabindex', '0');
+    function toggle() {
+      if (part === 'next') { nextOpen = !nextOpen; }
+      else {
+        if (!state.fold) state.fold = {};
+        state.fold[part] = !sec.classList.contains('folded');
+        if (holdOpen === part) holdOpen = null;
+        save();
+      }
+      render();
+    }
+    head.addEventListener('click', toggle);
+    head.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
+    });
+  });
   var PART_NAME = { am: 'morning', day: 'during the day', pm: 'night' };
   function renderNext() {
     var tm = tomorrow(), ul = document.getElementById('list-next'), n = 0;
@@ -562,6 +599,9 @@ ul:empty { margin-top: 0; }
       });
     });
     document.getElementById('next-wrap').hidden = n === 0;
+    var nsec = ul.parentNode;
+    nsec.classList.toggle('folded', !nextOpen);
+    nsec.querySelector('.head').setAttribute('aria-expanded', nextOpen ? 'true' : 'false');
     document.getElementById('count-next').textContent = n === 1 ? '1 item' : n + ' items';
   }
 
@@ -591,7 +631,14 @@ ul:empty { margin-top: 0; }
         }
         b.addEventListener('click', function () {
           if (state.day !== today()) { rollover(); return; }
+          var wasDone = partState(part).done;
           state.done[it.id] = !state.done[it.id];
+          if (!wasDone && partState(part).done) {
+            /* Just finished the section: show the last tick for a moment, then fold it away. */
+            if (state.fold) delete state.fold[part];
+            holdOpen = part;
+            setTimeout(function () { if (holdOpen === part) { holdOpen = null; render(); } }, 900);
+          }
           save();
           render();
         });
@@ -621,6 +668,11 @@ ul:empty { margin-top: 0; }
       document.getElementById('count-' + part).textContent = required.length ? n + ' of ' + required.length : '';
       var empty = document.getElementById('empty-' + part);
       if (empty) empty.hidden = itemsFor(part).length > 0;
+      var sec = ul.parentNode, ps = partState(part), fold = state.fold || {};
+      var folded = holdOpen === part ? false : (part in fold ? fold[part] : ps.done);
+      sec.classList.toggle('folded', folded);
+      sec.classList.toggle('alldone', ps.done);
+      sec.querySelector('.head').setAttribute('aria-expanded', folded ? 'false' : 'true');
     });
     var all = itemsFor('am').concat(itemsFor('day'), itemsFor('pm')).filter(function (i) { return i.tag !== 'optional'; });
     document.body.classList.toggle('editing', editing);
