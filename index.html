@@ -421,10 +421,11 @@ ul:empty { margin-top: 0; }
     var byList = !am.done ? 0 : (!dy.done ? 1 : 2);
     var byClock = h < SKY.dayStarts ? 2 : h < SKY.morningDue ? 0 : h < SKY.dayDue ? 1 : 2;
     var scene = SCENES[Math.max(byList, byClock)];
-    var late = h >= SKY.dayStarts && (
-      (h >= SKY.morningDue && am.has && !am.done) ||
-      (h >= SKY.dayDue && dy.has && !dy.done) ||
-      (h >= SKY.nightDue && pm.has && !pm.done));
+    /* The sun answers for the morning list. The moon only answers for the day and night lists,
+       so a missed morning is forgiven by the evening. */
+    var late = h >= SKY.dayStarts && (scene === 'evening'
+      ? ((h >= SKY.dayDue && dy.has && !dy.done) || (h >= SKY.nightDue && pm.has && !pm.done))
+      : (h >= SKY.morningDue && am.has && !am.done));
     var b = document.body;
     if (b.getAttribute('data-scene') !== scene) {
       b.setAttribute('data-scene', scene);
