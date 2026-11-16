@@ -457,15 +457,20 @@ ul:empty { margin-top: 0; }
     var late = h >= SKY.dayStarts && (scene === 'evening'
       ? ((h >= SKY.dayDue && dy.has && !dy.done) || (h >= SKY.nightDue && pm.has && !pm.done))
       : (h >= SKY.morningDue && am.has && !am.done));
-    var b = document.body;
-    if (b.getAttribute('data-scene') !== scene) {
+    var b = document.body, prev = b.getAttribute('data-scene'), changed = prev !== scene;
+    /* A new part of the day starts clean: forget which headings were tapped open or shut. */
+    if (changed && prev && state.fold) { state.fold = {}; save(); }
+    activePart = { morning: 'am', day: 'day', evening: 'pm' }[scene];
+    if (changed) {
       b.setAttribute('data-scene', scene);
       document.documentElement.style.background = SKY_TOP[scene];
       var meta = document.querySelector('meta[name="theme-color"]');
       if (meta) meta.setAttribute('content', SKY_TOP[scene]);
     }
     if (late) b.setAttribute('data-mood', 'sad'); else b.removeAttribute('data-mood');
+    return changed;
   }
+  var activePart = 'am';
 
   /* ── Edit the checklist here. Keep each id unique. ── */
   var ROUTINE = {
@@ -609,6 +614,7 @@ ul:empty { margin-top: 0; }
   var CROSS = '<svg viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8" stroke-linecap="round"/></svg>';
 
   function render() {
+    updateScene();   /* first, so the lists below know which section is the active one */
     PARTS.forEach(function (part) {
       var ul = document.getElementById('list-' + part);
       ul.innerHTML = '';
@@ -669,7 +675,8 @@ ul:empty { margin-top: 0; }
       var empty = document.getElementById('empty-' + part);
       if (empty) empty.hidden = itemsFor(part).length > 0;
       var sec = ul.parentNode, ps = partState(part), fold = state.fold || {};
-      var folded = holdOpen === part ? false : (part in fold ? fold[part] : ps.done);
+      /* Only the section for the current part of the day is open, unless its heading was tapped. */
+      var folded = holdOpen === part ? false : (part in fold ? fold[part] : part !== activePart);
       sec.classList.toggle('folded', folded);
       sec.classList.toggle('alldone', ps.done);
       sec.querySelector('.head').setAttribute('aria-expanded', folded ? 'false' : 'true');
@@ -691,7 +698,6 @@ ul:empty { margin-top: 0; }
     if (allDone) { status.className = 'done-msg'; status.textContent = 'All done today. Sleep well ✨'; }
     else { status.className = ''; status.textContent = 'Ticks clear by themselves each new day.'; }
     renderNext();
-    updateScene();
   }
 
   document.getElementById('edit').addEventListener('click', function () {
@@ -751,8 +757,8 @@ ul:empty { margin-top: 0; }
   document.addEventListener('visibilitychange', function () { if (!document.hidden) rollover(); });
   window.addEventListener('pageshow', rollover);
   window.addEventListener('focus', rollover);
-  setInterval(function () { rollover(); updateScene(); }, 60000);
-  document.addEventListener('visibilitychange', function () { if (!document.hidden) updateScene(); });
+  setInterval(function () { rollover(); if (updateScene()) render(); }, 60000);
+  document.addEventListener('visibilitychange', function () { if (!document.hidden && updateScene()) render(); });
 
   /* First paint shows the right sky straight away; animations only play for changes after that. */
   document.body.classList.add('boot');
