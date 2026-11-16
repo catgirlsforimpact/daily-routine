@@ -140,6 +140,15 @@ li .item { flex: 1 1 auto; width: auto; min-width: 0; }
 .remove svg { width: 14px; height: 14px; stroke: currentColor; stroke-width: 2; fill: none; }
 .remove:active { background: rgba(201, 158, 224, .24); }
 .remove:focus-visible { outline: 2px solid var(--orchid); outline-offset: 2px; }
+body:not(.editing) .remove { display: none; }
+.editing .remove { color: var(--orchid); }
+.foot-btns { display: flex; gap: 8px; }
+.restore {
+  flex-basis: 100%; font: inherit; font-size: 13px; color: var(--orchid); background: none; border: 0;
+  padding: 8px 0; text-align: left; text-decoration: underline; text-underline-offset: 3px; cursor: pointer;
+  touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+}
+.reset.on { background: var(--orchid); color: #fff; border-color: var(--orchid); }
 .add { margin-top: 6px; }
 .empty { margin: 14px 0 0; font-size: 14px; color: var(--muted); }
 ul:empty { margin-top: 0; }
@@ -272,7 +281,11 @@ ul:empty { margin-top: 0; }
 
     <div class="foot">
       <span id="status">Ticks clear by themselves each new day.</span>
-      <button class="reset" id="reset" type="button">Clear today</button>
+      <div class="foot-btns">
+        <button class="reset" id="edit" type="button" aria-pressed="false">Edit list</button>
+        <button class="reset" id="reset" type="button">Clear today</button>
+      </div>
+      <button class="restore" id="restore" type="button" hidden></button>
     </div>
   </main>
 </div>
@@ -290,10 +303,11 @@ ul:empty { margin-top: 0; }
       { id: 'stretch', text: 'Stretch + posture', tag: '5–10 min' },
       { id: 'face', text: 'Wash face' },
       { id: 'oatmeal', text: 'Oatmeal breakfast' },
-      { id: 'schedule', text: 'Check schedule + top 3' },
+      { id: 'schedule', text: 'Check schedule + top 3' }
+    ],
+    day: [
       { id: 'class', text: 'Class or first task' }
     ],
-    day: [],   /* filled with your own items from the app */
     pm: [
       { id: 'top3', text: 'Write tomorrow’s top 3' },
       { id: 'cherries', text: 'Cherries to the fridge' },
@@ -333,7 +347,19 @@ ul:empty { margin-top: 0; }
     if (changed) saveCustom();
   }
   pruneCustom();
-  function itemsFor(part) { return ROUTINE[part].concat(custom[part]); }
+  /* Built-in items you removed with "Edit list" (ids). They can be brought back. */
+  var HKEY = 'sofi-routine-hidden-v1';
+  var hidden = [];
+  try {
+    var savedHidden = JSON.parse(localStorage.getItem(HKEY) || 'null');
+    if (Array.isArray(savedHidden)) hidden = savedHidden;
+  } catch (e) {}
+  function saveHidden() { try { localStorage.setItem(HKEY, JSON.stringify(hidden)); } catch (e) {} }
+  var editing = false;
+
+  function itemsFor(part) {
+    return ROUTINE[part].filter(function (i) { return hidden.indexOf(i.id) < 0; }).concat(custom[part]);
+  }
 
   var CHECK = '<svg viewBox="0 0 16 16"><path d="M3 8.5l3.2 3L13 4.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   var CROSS = '<svg viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8" stroke-linecap="round"/></svg>';
@@ -366,21 +392,24 @@ ul:empty { margin-top: 0; }
           render();
         });
         li.appendChild(b);
-        if (it.custom) {
-          var x = document.createElement('button');
-          x.type = 'button';
-          x.className = 'remove';
-          x.setAttribute('aria-label', 'Remove ' + it.text);
-          x.innerHTML = CROSS;
-          x.addEventListener('click', function () {
+        var x = document.createElement('button');
+        x.type = 'button';
+        x.className = 'remove';
+        x.setAttribute('aria-label', 'Remove ' + it.text);
+        x.innerHTML = CROSS;
+        x.addEventListener('click', function () {
+          if (it.custom) {
             custom[part] = custom[part].filter(function (i) { return i.id !== it.id; });
-            delete state.done[it.id];
             saveCustom();
-            save();
-            render();
-          });
-          li.appendChild(x);
-        }
+          } else {
+            hidden.push(it.id);
+            saveHidden();
+          }
+          delete state.done[it.id];
+          save();
+          render();
+        });
+        li.appendChild(x);
         ul.appendChild(li);
       });
       var required = itemsFor(part).filter(function (i) { return i.tag !== 'optional'; });
@@ -390,11 +419,32 @@ ul:empty { margin-top: 0; }
       if (empty) empty.hidden = itemsFor(part).length > 0;
     });
     var all = itemsFor('am').concat(itemsFor('day'), itemsFor('pm')).filter(function (i) { return i.tag !== 'optional'; });
-    var allDone = all.every(function (i) { return state.done[i.id]; });
+    document.body.classList.toggle('editing', editing);
+    var editBtn = document.getElementById('edit');
+    editBtn.textContent = editing ? 'Done editing' : 'Edit list';
+    editBtn.classList.toggle('on', editing);
+    editBtn.setAttribute('aria-pressed', editing ? 'true' : 'false');
+    var restore = document.getElementById('restore');
+    var removedCount = hidden.filter(function (id) {
+      return PARTS.some(function (p) { return ROUTINE[p].some(function (i) { return i.id === id; }); });
+    }).length;
+    restore.hidden = !(editing && removedCount);
+    restore.textContent = 'Bring back removed items (' + removedCount + ')';
+    var allDone = all.length > 0 && all.every(function (i) { return state.done[i.id]; });
     var status = document.getElementById('status');
     if (allDone) { status.className = 'done-msg'; status.textContent = 'All done today. Sleep well ✨'; }
     else { status.className = ''; status.textContent = 'Ticks clear by themselves each new day.'; }
   }
+
+  document.getElementById('edit').addEventListener('click', function () {
+    editing = !editing;
+    render();
+  });
+  document.getElementById('restore').addEventListener('click', function () {
+    hidden = [];
+    saveHidden();
+    render();
+  });
 
   document.getElementById('reset').addEventListener('click', function () {
     state = { day: today(), done: {} };
