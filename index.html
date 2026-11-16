@@ -418,7 +418,8 @@ ul:empty { margin-top: 0; }
   }
   function updateScene() {
     var h = hourNow(), am = partState('am'), dy = partState('day'), pm = partState('pm');
-    var byList = !am.done ? 0 : (!dy.done ? 1 : 2);
+    /* Finishing the day list brings the evening even if the morning list was skipped. */
+    var byList = dy.done ? 2 : (am.done ? 1 : 0);
     var byClock = h < SKY.dayStarts ? 2 : h < SKY.morningDue ? 0 : h < SKY.dayDue ? 1 : 2;
     var scene = SCENES[Math.max(byList, byClock)];
     /* The sun answers for the morning list. The moon only answers for the day and night lists,

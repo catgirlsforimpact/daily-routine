@@ -1,6 +1,6 @@
 /* Offline support for the Daily Routine app.
    Bump VERSION whenever index.html changes so phones pick up the new copy. */
-const VERSION = 'v7';
+const VERSION = 'v8';
 const CACHE = 'daily-routine-' + VERSION;
 
 const CORE = [
