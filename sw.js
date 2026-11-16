@@ -1,6 +1,6 @@
 /* Offline support for the Daily Routine app.
    Bump VERSION whenever index.html changes so phones pick up the new copy. */
-const VERSION = 'v3';
+const VERSION = 'v4';
 const CACHE = 'daily-routine-' + VERSION;
 
 const CORE = [
@@ -18,7 +18,8 @@ const FONT_HOSTS = ['fonts.googleapis.com', 'fonts.gstatic.com'];
 self.addEventListener('install', (event) => {
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE);
-    await cache.addAll(CORE);
+    // 'reload' skips the browser's own HTTP cache, so an update never stores a stale page.
+    await cache.addAll(CORE.map((u) => new Request(u, { cache: 'reload' })));
 
     // Fonts are a nice-to-have: store the stylesheet and every font file it names,
     // but never let a font failure stop the app from installing.
@@ -60,7 +61,7 @@ self.addEventListener('fetch', (event) => {
     if (cached && isFont) return cached;
 
     // App files: answer from the cache straight away, refresh it in the background.
-    const refresh = fetch(req).then((res) => {
+    const refresh = (sameOrigin ? fetch(req.url, { cache: 'no-cache' }) : fetch(req)).then((res) => {
       if (res.ok) cache.put(req, res.clone());
       return res;
     }).catch(() => null);
