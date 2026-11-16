@@ -37,6 +37,7 @@
   color-scheme: light;
 }
 *, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html {
   min-height: 100%;
   background: var(--sky-mid);
@@ -140,6 +141,8 @@ li .item { flex: 1 1 auto; width: auto; min-width: 0; }
 .remove:active { background: rgba(201, 158, 224, .24); }
 .remove:focus-visible { outline: 2px solid var(--orchid); outline-offset: 2px; }
 .add { margin-top: 6px; }
+.empty { margin: 14px 0 0; font-size: 14px; color: var(--muted); }
+ul:empty { margin-top: 0; }
 .add-open {
   font: inherit; font-size: 15px; color: var(--orchid); background: none; border: 0;
   padding: 10px 6px; margin: 0 -6px; min-height: 44px; border-radius: 12px; cursor: pointer;
@@ -231,6 +234,27 @@ li .item { flex: 1 1 auto; width: auto; min-width: 0; }
     </svg>
 
     <section>
+      <div class="head"><h2>During the day</h2><span class="count" id="count-day"></span></div>
+      <ul id="list-day"></ul>
+      <p class="empty" id="empty-day">Nothing yet. Add your top 3 or anything else for today.</p>
+      <div class="add" data-part="day">
+        <button class="add-open" type="button">+ Add something</button>
+        <form class="add-form" hidden>
+          <input type="text" maxlength="60" placeholder="e.g. Finish essay" aria-label="New daytime item" enterkeyhint="done" autocomplete="off">
+          <div class="add-row">
+            <label class="keep-label"><input type="checkbox" class="keep"> Keep every day</label>
+            <button type="button" class="cancel">Done</button>
+            <button type="submit" class="add-go">Add</button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <svg class="wave" viewBox="0 0 400 18" preserveAspectRatio="none" aria-hidden="true">
+      <path d="M0 8 C40 16 60 16 100 9 S160 2 200 9 S260 16 300 9 S360 2 400 12"/>
+    </svg>
+
+    <section>
       <div class="head"><h2>Good night</h2><span class="count" id="count-pm"></span></div>
       <ul id="list-pm"></ul>
       <div class="add" data-part="pm">
@@ -269,6 +293,7 @@ li .item { flex: 1 1 auto; width: auto; min-width: 0; }
       { id: 'schedule', text: 'Check schedule + top 3' },
       { id: 'class', text: 'Class or first task' }
     ],
+    day: [],   /* filled with your own items from the app */
     pm: [
       { id: 'top3', text: 'Write tomorrow’s top 3' },
       { id: 'cherries', text: 'Cherries to the fridge' },
@@ -292,15 +317,16 @@ li .item { flex: 1 1 auto; width: auto; min-width: 0; }
 
   /* Items you add yourself. "day" is set on just-for-today items, which vanish at the next new day. */
   var CKEY = 'sofi-routine-custom-v1';
-  var custom = { am: [], pm: [] };
+  var PARTS = ['am', 'day', 'pm'];
+  var custom = { am: [], day: [], pm: [] };
   try {
     var savedCustom = JSON.parse(localStorage.getItem(CKEY) || 'null');
-    if (savedCustom && Array.isArray(savedCustom.am) && Array.isArray(savedCustom.pm)) custom = savedCustom;
+    if (savedCustom) PARTS.forEach(function (p) { if (Array.isArray(savedCustom[p])) custom[p] = savedCustom[p]; });
   } catch (e) {}
   function saveCustom() { try { localStorage.setItem(CKEY, JSON.stringify(custom)); } catch (e) {} }
   function pruneCustom() {
     var t = today(), changed = false;
-    ['am', 'pm'].forEach(function (part) {
+    PARTS.forEach(function (part) {
       var kept = custom[part].filter(function (i) { return !i.day || i.day === t; });
       if (kept.length !== custom[part].length) { custom[part] = kept; changed = true; }
     });
@@ -313,7 +339,7 @@ li .item { flex: 1 1 auto; width: auto; min-width: 0; }
   var CROSS = '<svg viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8" stroke-linecap="round"/></svg>';
 
   function render() {
-    ['am', 'pm'].forEach(function (part) {
+    PARTS.forEach(function (part) {
       var ul = document.getElementById('list-' + part);
       ul.innerHTML = '';
       itemsFor(part).forEach(function (it) {
@@ -359,9 +385,11 @@ li .item { flex: 1 1 auto; width: auto; min-width: 0; }
       });
       var required = itemsFor(part).filter(function (i) { return i.tag !== 'optional'; });
       var n = required.filter(function (i) { return state.done[i.id]; }).length;
-      document.getElementById('count-' + part).textContent = n + ' of ' + required.length;
+      document.getElementById('count-' + part).textContent = required.length ? n + ' of ' + required.length : '';
+      var empty = document.getElementById('empty-' + part);
+      if (empty) empty.hidden = itemsFor(part).length > 0;
     });
-    var all = itemsFor('am').concat(itemsFor('pm')).filter(function (i) { return i.tag !== 'optional'; });
+    var all = itemsFor('am').concat(itemsFor('day'), itemsFor('pm')).filter(function (i) { return i.tag !== 'optional'; });
     var allDone = all.every(function (i) { return state.done[i.id]; });
     var status = document.getElementById('status');
     if (allDone) { status.className = 'done-msg'; status.textContent = 'All done today. Sleep well ✨'; }
