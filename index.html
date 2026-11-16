@@ -226,6 +226,16 @@ ul:empty { margin-top: 0; }
 .add-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .keep-label { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--plum); margin-right: auto; min-height: 36px; cursor: pointer; }
 .keep-label input { width: 18px; height: 18px; margin: 0; accent-color: var(--orchid); }
+.when { display: flex; flex-basis: 100%; border: 1.5px solid var(--lilac); border-radius: 999px; padding: 3px; gap: 2px; }
+.when label { flex: 1; position: relative; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.when input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
+.when span { display: block; text-align: center; font-size: 14px; color: var(--orchid); padding: 7px 4px; border-radius: 999px; white-space: nowrap; }
+.when input:checked + span { background: var(--orchid); color: #fff; font-weight: 500; }
+.when input:focus-visible + span { outline: 2px solid var(--orchid); outline-offset: 2px; }
+.add-row .cancel { margin-left: auto; }
+#next-wrap h3 { font-family: var(--display); font-style: italic; font-weight: 500; font-size: 24px; margin: 0; }
+#next-wrap .planned { min-height: 44px; padding: 6px 0; font-size: 17px; flex: 1 1 auto; min-width: 0; }
+#next-wrap .remove { display: grid; }
 .add-go, .cancel {
   font: inherit; font-size: 14px; border-radius: 999px; padding: 8px 16px; cursor: pointer;
   touch-action: manipulation; -webkit-tap-highlight-color: transparent;
@@ -329,7 +339,7 @@ ul:empty { margin-top: 0; }
         <form class="add-form" hidden>
           <input type="text" maxlength="60" placeholder="e.g. Top 3: finish essay" aria-label="New morning item" enterkeyhint="done" autocomplete="off">
           <div class="add-row">
-            <label class="keep-label"><input type="checkbox" class="keep"> Keep every day</label>
+            <div class="when" role="radiogroup" aria-label="When is it for"></div>
             <button type="button" class="cancel">Done</button>
             <button type="submit" class="add-go">Add</button>
           </div>
@@ -350,7 +360,7 @@ ul:empty { margin-top: 0; }
         <form class="add-form" hidden>
           <input type="text" maxlength="60" placeholder="e.g. Finish essay" aria-label="New daytime item" enterkeyhint="done" autocomplete="off">
           <div class="add-row">
-            <label class="keep-label"><input type="checkbox" class="keep"> Keep every day</label>
+            <div class="when" role="radiogroup" aria-label="When is it for"></div>
             <button type="button" class="cancel">Done</button>
             <button type="submit" class="add-go">Add</button>
           </div>
@@ -370,13 +380,23 @@ ul:empty { margin-top: 0; }
         <form class="add-form" hidden>
           <input type="text" maxlength="60" placeholder="e.g. Pack bag for tomorrow" aria-label="New night item" enterkeyhint="done" autocomplete="off">
           <div class="add-row">
-            <label class="keep-label"><input type="checkbox" class="keep"> Keep every day</label>
+            <div class="when" role="radiogroup" aria-label="When is it for"></div>
             <button type="button" class="cancel">Done</button>
             <button type="submit" class="add-go">Add</button>
           </div>
         </form>
       </div>
     </section>
+
+    <div id="next-wrap" hidden>
+      <svg class="wave" viewBox="0 0 400 18" preserveAspectRatio="none" aria-hidden="true">
+        <path d="M0 10 C40 2 60 2 100 9 S160 16 200 9 S260 2 300 9 S360 16 400 6"/>
+      </svg>
+      <section>
+        <div class="head"><h3>Planned for tomorrow</h3><span class="count" id="count-next"></span></div>
+        <ul id="list-next"></ul>
+      </section>
+    </div>
 
     <div class="foot">
       <span id="status">Ticks clear by themselves each new day.</span>
@@ -464,6 +484,11 @@ ul:empty { margin-top: 0; }
     var d = new Date();
     return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
   }
+  function tomorrow() {
+    var d = new Date();
+    d.setDate(d.getDate() + 1);
+    return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
+  }
   var state = { day: today(), done: {} };
   try {
     var saved = JSON.parse(localStorage.getItem(KEY) || 'null');
@@ -483,7 +508,8 @@ ul:empty { margin-top: 0; }
   function pruneCustom() {
     var t = today(), changed = false;
     PARTS.forEach(function (part) {
-      var kept = custom[part].filter(function (i) { return !i.day || i.day === t; });
+      var tm = tomorrow();
+      var kept = custom[part].filter(function (i) { return !i.day || i.day === t || i.day === tm; });
       if (kept.length !== custom[part].length) { custom[part] = kept; changed = true; }
     });
     if (changed) saveCustom();
@@ -500,7 +526,43 @@ ul:empty { margin-top: 0; }
   var editing = false;
 
   function itemsFor(part) {
-    return ROUTINE[part].filter(function (i) { return hidden.indexOf(i.id) < 0; }).concat(custom[part]);
+    var t = today();
+    return ROUTINE[part].filter(function (i) { return hidden.indexOf(i.id) < 0; })
+      .concat(custom[part].filter(function (i) { return !i.day || i.day === t; }));
+  }
+  var PART_NAME = { am: 'morning', day: 'during the day', pm: 'night' };
+  function renderNext() {
+    var tm = tomorrow(), ul = document.getElementById('list-next'), n = 0;
+    ul.innerHTML = '';
+    PARTS.forEach(function (part) {
+      custom[part].forEach(function (it) {
+        if (it.day !== tm) return;
+        n++;
+        var li = document.createElement('li');
+        var row = document.createElement('span');
+        row.className = 'planned';
+        row.textContent = it.text;
+        var tag = document.createElement('span');
+        tag.className = 'tag';
+        tag.textContent = PART_NAME[part];
+        row.appendChild(tag);
+        li.appendChild(row);
+        var x = document.createElement('button');
+        x.type = 'button';
+        x.className = 'remove';
+        x.setAttribute('aria-label', 'Remove ' + it.text + ' from tomorrow');
+        x.innerHTML = CROSS;
+        x.addEventListener('click', function () {
+          custom[part] = custom[part].filter(function (i) { return i.id !== it.id; });
+          saveCustom();
+          render();
+        });
+        li.appendChild(x);
+        ul.appendChild(li);
+      });
+    });
+    document.getElementById('next-wrap').hidden = n === 0;
+    document.getElementById('count-next').textContent = n === 1 ? '1 item' : n + ' items';
   }
 
   var CHECK = '<svg viewBox="0 0 16 16"><path d="M3 8.5l3.2 3L13 4.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
@@ -576,6 +638,7 @@ ul:empty { margin-top: 0; }
     var status = document.getElementById('status');
     if (allDone) { status.className = 'done-msg'; status.textContent = 'All done today. Sleep well ✨'; }
     else { status.className = ''; status.textContent = 'Ticks clear by themselves each new day.'; }
+    renderNext();
     updateScene();
   }
 
@@ -606,7 +669,10 @@ ul:empty { margin-top: 0; }
     var open = wrap.querySelector('.add-open');
     var form = wrap.querySelector('.add-form');
     var input = form.querySelector('input[type="text"]');
-    var keep = form.querySelector('.keep');
+    var when = form.querySelector('.when');
+    when.innerHTML = [['today', 'Today'], ['tomorrow', 'Tomorrow'], ['always', 'Every day']].map(function (o, i) {
+      return '<label><input type="radio" name="when-' + part + '" value="' + o[0] + '"' + (i === 0 ? ' checked' : '') + '><span>' + o[1] + '</span></label>';
+    }).join('');
     open.addEventListener('click', function () {
       form.hidden = false; open.hidden = true; input.focus();
     });
@@ -621,7 +687,7 @@ ul:empty { margin-top: 0; }
       custom[part].push({
         id: 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
         text: text,
-        day: keep.checked ? null : today(),
+        day: (function (v) { return v === 'always' ? null : v === 'tomorrow' ? tomorrow() : today(); })(when.querySelector('input:checked').value),
         custom: true
       });
       saveCustom();
